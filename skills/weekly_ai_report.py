@@ -107,6 +107,11 @@ def generate_report_content() -> str:
 
 {template}
 
+【硬性排版规则——违反则输出无效】
+- 标题层级只允许 #、##、### 三级。绝对不能出现 #### 或 ##### 等四级及以上标题
+- 如果需要四级子标题效果，用加粗列表项实现。例如：- **字节跳动 · 豆包**：而非 #### 字节跳动 · 豆包
+- 引用块（>）只用一层，禁止嵌套引用
+
 【最终自查——请逐条确认】
 - 读完第一部分，一个同花顺新用户 DA 能不能在周一晨会上提出一个具体的观点？如果没有，重写
 - 第二部分有没有可检索验证的具体信息（产品名、版本号、政策文件标题）？如果没有，重写
@@ -120,34 +125,108 @@ def generate_report_content() -> str:
     print(f"正在连接 Kimi ({model}) 撰写深度行业报告 (预计 3-5 分钟)...")
     url = "https://api.moonshot.cn/v1/chat/completions"
 
-    payload = json.dumps({
+    # K2.6 web_search 要求关闭 thinking
+    base_payload = {
         "model": model,
-        "messages": [{"role": "user", "content": prompt}],
-        "max_completion_tokens": 32768
-    })
+        "max_completion_tokens": 32768,
+        "thinking": {"type": "disabled"},
+        "tools": [{"type": "builtin_function", "function": {"name": "$web_search"}}]
+    }
 
     import subprocess
+    import uuid
+
     try:
-        result = subprocess.run([
-            "curl", "-k", "-s", "-X", "POST", url,
-            "-H", "Content-Type: application/json",
-            "-H", f"Authorization: Bearer {api_key}",
-            "-d", payload,
-            "--max-time", "900"
-        ], capture_output=True, text=True, timeout=910)
-        if result.returncode != 0:
-            print(f"curl 调用失败: {result.stderr}")
+        # 第 1 轮：初始请求，Kimi 可能触发搜索
+        msgs = [{"role": "user", "content": prompt}]
+        for iteration in range(5):  # 最多 5 轮 tool call
+            req_payload = json.dumps({**base_payload, "messages": msgs})
+            cmd_id = f"curl_req_{uuid.uuid4().hex[:6]}"
+            print(f"  [第{iteration+1}轮] 发送请求...")
+
+            result = subprocess.run([
+                "curl", "-k", "-s", "-X", "POST", url,
+                "-H", "Content-Type: application/json",
+                "-H", f"Authorization: Bearer {api_key}",
+                "-d", req_payload,
+                "--max-time", "900"
+            ], capture_output=True, text=True, timeout=910)
+
+            if result.returncode != 0:
+                print(f"  curl 失败: {result.stderr}")
+                return ""
+
+            resp = json.loads(result.stdout)
+            if "error" in resp:
+                print(f"  API 错误: {resp['error']}")
+                return ""
+
+            choice = resp.get("choices", [{}])[0]
+            msg = choice.get("message", {})
+            finish = choice.get("finish_reason", "")
+
+            # tool_calls：Kimi 要求联网搜索
+            if finish == "tool_calls":
+                tool_calls = msg.get("tool_calls", [])
+                if not tool_calls:
+                    print("  收到 tool_calls 但无具体调用，跳过")
+                    # fallback: 直接取 content
+                    content = msg.get("content") or msg.get("reasoning_content", "")
+                    return content.replace("{current_date}", current_date)
+
+                print(f"  Kimi 请求联网搜索（{len(tool_calls)} 次）...")
+
+                # 构建 assistant 消息（含 tool_calls）
+                assistant_msg = {
+                    "role": "assistant",
+                    "content": msg.get("content") or None,
+                    "tool_calls": tool_calls
+                }
+                msgs.append(assistant_msg)
+
+                # 为每个 tool_call 返回一个 tool 消息
+                # Kimi 的 $web_search 是服务端工具，只需原样回传
+                for tc in tool_calls:
+                    tool_msg = {
+                        "role": "tool",
+                        "tool_call_id": tc["id"],
+                        "content": json.dumps({"status": "called"}, ensure_ascii=False)
+                    }
+                    msgs.append(tool_msg)
+
+                print(f"  已回传搜索请求，等待 Kimi 生成...")
+                continue
+
+            # 正常完成
+            if finish == "stop" or finish == "length" or msg.get("content"):
+                content = msg.get("content") or msg.get("reasoning_content", "")
+                return content.replace("{current_date}", current_date)
+
+            # 未预期的 finish_reason
+            content = msg.get("content") or msg.get("reasoning_content", "")
+            if content:
+                return content.replace("{current_date}", current_date)
+            print(f"  未预期的 finish_reason: {finish}，内容为空")
             return ""
-        resp = json.loads(result.stdout)
-        msg = resp.get("choices", [{}])[0].get("message", {})
-        content = msg.get("content") or msg.get("reasoning_content", "")
-        return content.replace("{current_date}", current_date)
+
+        print("  达到最大迭代次数，返回已有内容")
+        return ""
+
     except subprocess.TimeoutExpired:
         print("Kimi API 调用超时（超过 15 分钟）")
         return ""
     except Exception as e:
         print(f"Kimi API 调用失败: {e}")
         return ""
+
+def cleanup_markdown(text: str) -> str:
+    """后处理：修复模型输出的格式违规"""
+    import re
+    # #### 四级标题 → 加粗列表项
+    text = re.sub(r'^####\s+(.+)', r'- **\1**', text, flags=re.MULTILINE)
+    # ##### 五级标题同上
+    text = re.sub(r'^#####\s+(.+)', r'- **\1**', text, flags=re.MULTILINE)
+    return text
 
 def markdown_to_html(md: str) -> str:
     import re
@@ -512,7 +591,7 @@ def auto_push_to_github():
 
 if __name__ == "__main__":
     print("\n====== AI与数据驱动周报 生成任务启动 ======")
-    report_content = generate_report_content()
+    report_content = cleanup_markdown(generate_report_content())
     if report_content:
         filepath = save_report(report_content)
         auto_push_to_github()
