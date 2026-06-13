@@ -116,7 +116,7 @@ def generate_report_content() -> str:
 """
 
     api_key = os.getenv("OPENAI_API_KEY")
-    model = os.getenv("DEFAULT_MODEL", "kimi-k2.5")
+    model = os.getenv("DEFAULT_MODEL", "kimi-k2.6")
     print(f"正在连接 Kimi ({model}) 撰写深度行业报告 (预计 60-120 秒)...")
     url = "https://api.moonshot.cn/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}
