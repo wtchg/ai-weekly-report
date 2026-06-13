@@ -1,0 +1,7 @@
+# Secrets — never commit
+docker-compose.yml
+.env
+config/
+__pycache__/
+*.pyc
+.DS_Store

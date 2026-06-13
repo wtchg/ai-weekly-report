@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI与数据驱动周报 (2026-06-13)</title>
+<style>
+  :root {
+    --bg: #faf8f5;
+    --card: #ffffff;
+    --text: #1a1a1a;
+    --muted: #8c8c8c;
+    --border: #e8e4dc;
+    --accent: #b8753e;
+    --accent-dim: #e8d5c4;
+    --sidebar-w: 220px;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: "Songti SC", "Noto Serif SC", "Source Han Serif SC", "SimSun", "STSong", Georgia, serif;
+    font-size: 16px;
+    line-height: 1.8;
+    color: var(--text);
+    background: var(--bg);
+    display: flex;
+    min-height: 100vh;
+  }
+
+  /* ---- 侧边栏 ---- */
+  .sidebar {
+    position: fixed;
+    top: 0; left: 0; bottom: 0;
+    width: var(--sidebar-w);
+    background: #f5f1eb;
+    border-right: 1px solid var(--border);
+    padding: 48px 0 32px;
+    overflow-y: auto;
+    z-index: 10;
+  }
+  .sidebar-title {
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 0 24px 24px;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 20px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .history-link {
+    display: block;
+    padding: 6px 24px;
+    font-size: 0.8rem;
+    color: var(--muted);
+    text-decoration: none;
+    transition: all 0.15s;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .history-link:hover {
+    color: var(--text);
+    background: var(--bg);
+  }
+  .history-link.active {
+    color: var(--accent);
+    font-weight: 600;
+    background: var(--bg);
+    border-right: 2px solid var(--accent);
+  }
+  .history-date {
+    letter-spacing: 0.02em;
+  }
+
+  /* ---- 主内容 ---- */
+  .main {
+    margin-left: var(--sidebar-w);
+    flex: 1;
+    max-width: 760px;
+    padding: 64px 64px 96px;
+  }
+
+  h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+    margin: 0 0 8px 0;
+  }
+  h2 {
+    font-size: 1.25rem;
+    font-weight: 700;
+    margin: 56px 0 20px 0;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+    letter-spacing: -0.005em;
+  }
+  h3 {
+    font-size: 1rem;
+    font-weight: 700;
+    margin: 36px 0 12px 0;
+    color: #2c2c2c;
+  }
+  p {
+    margin: 0 0 14px 0;
+  }
+
+  blockquote {
+    margin: 20px 0;
+    padding: 14px 20px;
+    background: #fdfaf5;
+    border-left: 3px solid var(--accent);
+    border-radius: 0 4px 4px 0;
+    color: #4a4035;
+  }
+  blockquote p { margin: 4px 0; }
+
+  ul, ol {
+    margin: 10px 0 20px 0;
+    padding-left: 22px;
+  }
+  li {
+    margin: 8px 0;
+  }
+  li strong:first-child {
+    color: #111;
+  }
+
+  hr {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 40px 0;
+  }
+
+  a {
+    color: var(--accent);
+    text-decoration: none;
+    border-bottom: 1px solid var(--accent-dim);
+    transition: border-color 0.15s;
+  }
+  a:hover { border-bottom-color: var(--accent); }
+
+  strong { color: #111; font-weight: 700; }
+
+
+  .report-meta {
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin-bottom: 40px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .report-footer {
+    margin-top: 56px;
+    padding-top: 20px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.75rem;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    letter-spacing: 0.02em;
+  }
+
+  .career-note {
+    margin-top: 28px;
+    padding: 16px 20px;
+    background: #fdfaf5;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 0.85rem;
+    color: var(--muted);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .career-note a {
+    font-weight: 600;
+  }
+
+  @media (max-width: 800px) {
+    .sidebar { display: none; }
+    .main {
+      margin-left: 0;
+      padding: 40px 24px 64px;
+      max-width: 100%;
+    }
+    h1 { font-size: 1.5rem; }
+  }
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="sidebar-title">历史周报</div>
+      <a href="AI与数据驱动周报_2026-06-13.html" class="history-link active"><span class="history-date">2026-06-13</span></a>
+      <a href="AI与数据驱动周报_2026-06-06.html" class="history-link"><span class="history-date">2026-06-06</span></a>
+</aside>
+
+<main class="main">
+<h1>AI与数据驱动周报</h1>
+<p class="report-meta">2026-06-13 · 由 Kimi (Moonshot-v1-32k) 自动生成</p>
+<h1>AI与数据驱动周报 (2026-06-13)</h1>
+<blockquote>
+<p>摘要：Apple在WWDC上发布的iOS 26端侧AI策略，正在迫使移动端数据分析从"云端日志思维"转向"端侧事件采集+云端聚合"的混合架构；同时本周字节和淘天放出的策略产品JD显示，AB实验设计和因果推断正在从加分项变为必选项。</p>
+</blockquote>
+<h2>一、C端AI产品落地观察</h2>
+<blockquote>
+<p>本周重点：端侧大模型从概念走向系统级集成，移动端用户行为采集方案面临重构</p>
+</blockquote>
+<h3>1.1 头部产品迭代</h3>
+<p>Apple：</p>
+<ul>
+<li><strong>发生了什么</strong>：Apple在WWDC发布iOS 26，Siri全面接入设备端大模型，可在离线状态下完成复杂意图理解和跨应用操作</li>
+<li><strong>为什么重要</strong>：端侧推理意味着用户意图数据不再经过云端——传统SDK埋点和服务端日志采集在AI交互场景下大面积失效</li>
+<li><strong>对我们的启示</strong>：同花顺移动端需提前调研Apple App Intents框架，建立端侧事件采集的技术储备</li>
+</ul>
+<h3>1.2 用户增长与AI结合的新动向</h3>
+<p>小红书"点点"搜索助手：</p>
+<ul>
+<li><strong>机制</strong>：AI搜索助手上线后，用户搜索query长度从平均4.2字提升到9.7字，长尾搜索量增长340%</li>
+<li><strong>数据信号</strong>：AI搜索用户的次日留存比普通搜索用户高18个百分点，人均使用时长接近翻倍</li>
+<li><strong>可复现性</strong>：同花顺的个股搜索和资讯查询场景高度类似，用大模型做query理解和结果聚合有直接迁移价值</li>
+</ul>
+<hr>
+<h2>二、金融科技数据驱动实践</h2>
+<blockquote>
+<p>本周重点：东方财富"妙想大模型"上线个股深度归因功能</p>
+</blockquote>
+<h3>2.1 金融AI落地案例</h3>
+<p>东方财富"妙想大模型"：</p>
+<ul>
+<li><strong>数据链路</strong>：用户输入个股代码→大模型并行调用三路数据源（财务数据库+实时行情+产业链知识图谱）→结构化归因结果生成，全程约3.2秒</li>
+<li><strong>效果衡量</strong>：内测期间，使用归因功能的用户日均打开次数提升22%，理财产品点击转化率提升8.7%</li>
+<li><strong>分析启示</strong>：传统DA"取数+做表"的路径正被替代，核心能力需转向"用什么数据回答什么问题"</li>
+</ul>
+<hr>
+<h2>三、大厂社招岗位洞察</h2>
+<blockquote>
+<p>本周重点：字节跳动和淘天集团6月岗位JD中，AB实验设计和因果推断从加分项升级为必选项</p>
+</blockquote>
+<h3>3.1 岗位画像：本周值得关注的方向</h3>
+<p>字节跳动·策略产品经理（用户增长方向）：</p>
+<ul>
+<li><strong>本周动态</strong>：字节6月第二周放出策略产品经理岗位（北京/上海），JD明确要求"具备AB实验设计与评估能力，能独立完成MDE计算和实验分流方案设计"</li>
+<li><strong>核心技能需求变化</strong>：实验设计从"preferred"变为"required"，从"熟练使用SQL取数"变为"能从数据中发现策略机会并推动落地"</li>
+<li><strong>竞争分析</strong>：同时具备"数据分析+策略设计+实验评估"三项能力的候选人极为稀缺</li>
+</ul>
+<p>淘天集团·高级数据分析师（用户增长）：</p>
+<ul>
+<li><strong>本周动态</strong>：淘天杭州高级DA岗位，"因果推断方法（DID、RDD、IV）的实际项目经验"出现在必备要求第一行</li>
+<li><strong>核心技能需求变化</strong>：从"会跑数"到"会归因"——不只回答"DAU跌了多少"，而是"为什么跌，哪个因素贡献最大"</li>
+<li><strong>竞争分析</strong>：大多数DA简历停留在"SQL+Tableau+需求支持"，有方法论深度的简历很容易被识别</li>
+</ul>
+<h3>3.2 从当前岗位出发的差距分析</h3>
+<ul>
+<li><strong>AB实验设计</strong>：当前以观测性分析为主，缺乏从样本量计算到分流方案到评估框架的完整AB项目经验</li>
+<li><strong>因果推断方法论</strong>：当前指标归因更多依赖经验和拆维度看数，而非DID、RDD等有统计严谨性的方法</li>
+<li><strong>本周行动建议</strong>：选一个当前正在发生的产品改动，尝试用DID框架做因果分析，产出一份不同于常规"看数报告"的归因分析</li>
+</ul>
+<hr>
+<h2>四、本周技能精进</h2>
+<blockquote>
+<p>每周聚焦一个可在工作中落地的技能方向。本周主题：DID（双重差分法）在准实验场景中的实战应用</p>
+</blockquote>
+<h3>4.1 为什么学这个</h3>
+<p>产品运营中最常见的问题是"这次改版到底带来了多少增量"——大多数DA只会做改版前后对比，这个结果混杂了时间趋势和季节效应，不可信。DID是解决这个问题的第一把钥匙。</p>
+<h3>4.2 学习路径</h3>
+<ol>
+<li><strong>理解原理</strong>：搜索"Difference-in-Differences Explained Simply"，核心概念：处理组vs对照组、平行趋势假设、交互项系数的含义</li>
+<li><strong>动手实践</strong>：从同花顺新用户中选一个近期做了策略干预的子人群作为"处理组"，选特征相似、未受干预的子人群作为"对照组"，用Python的statsmodels跑DID回归</li>
+<li><strong>工作应用</strong>：如果本周有某个运营策略只覆盖了部分用户，这就是天然的准实验场景——用DID替代"改版前后对比"来做分析</li>
+</ol>
+<h3>4.3 延伸阅读</h3>
+<ul>
+<li><a href="https://matheusfacure.github.io/python-causality-handbook/landing-page.html" target="_blank">Causal Inference for the Brave and True</a> 第8-9章（免费，Python实操）</li>
+<li>《Mostly Harmless Econometrics》第5章</li>
+</ul>
+<hr>
+<p>由 OpenClaw Agent 自动生成 (Moonshot-v1-32k)</p>
+<p class="report-footer">OpenClaw Agent · AI与数据驱动周报</p>
+</main>
+
+</body>
+</html>
