@@ -116,7 +116,7 @@ def generate_report_content() -> str:
 """
 
     api_key = os.getenv("OPENAI_API_KEY")
-    model = os.getenv("DEFAULT_MODEL", "kimi-k2.6-thinking")
+    model = os.getenv("DEFAULT_MODEL", "kimi-k2.6")
     print(f"正在连接 Kimi ({model}) 撰写深度行业报告 (预计 60-120 秒)...")
     url = "https://api.moonshot.cn/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}
@@ -124,8 +124,7 @@ def generate_report_content() -> str:
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.7,
-        "max_completion_tokens": 16384,
-        "thinking": {"type": "enabled"}
+        "max_completion_tokens": 32768
     }
 
     try:
