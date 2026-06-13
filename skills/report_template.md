@@ -72,4 +72,4 @@
 - [1-2个高质量信息源或工具]
 
 ---
-由 OpenClaw Agent 自动生成 (Kimi K2.6)
+由 OpenClaw Agent 自动生成 (Kimi K2.6 Thinking)
