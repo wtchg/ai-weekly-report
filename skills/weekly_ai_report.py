@@ -123,12 +123,12 @@ def generate_report_content() -> str:
     data = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
-        "max_completion_tokens": 8192
+        "max_completion_tokens": 32768
     }
 
     try:
         req = urllib.request.Request(url, data=json.dumps(data).encode('utf-8'), headers=headers, method='POST')
-        with urllib.request.urlopen(req, timeout=600, context=_SSL_CTX) as res:
+        with urllib.request.urlopen(req, timeout=900, context=_SSL_CTX) as res:
             msg = json.loads(res.read().decode('utf-8'))["choices"][0]["message"]
             # thinking 模式下 content 是正文，reasoning_content 是内部推理
             result = msg.get("content") or msg.get("reasoning_content", "")
