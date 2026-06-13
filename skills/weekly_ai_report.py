@@ -515,6 +515,5 @@ if __name__ == "__main__":
     report_content = generate_report_content()
     if report_content:
         filepath = save_report(report_content)
-        push_to_feishu_group(filepath)
         auto_push_to_github()
     print("====== 任务流结束 ======\n")
