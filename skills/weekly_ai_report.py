@@ -444,10 +444,23 @@ def push_to_feishu_group(report_path: str):
         print("群聊通知发送成功！")
     except: pass
 
+def auto_push_to_github():
+    """生成报告后自动提交并推送到 GitHub。"""
+    import subprocess
+    current_date = datetime.now().strftime("%Y-%m-%d")
+    try:
+        subprocess.run(["git", "add", "-A"], cwd=REPO_ROOT, check=True, capture_output=True)
+        subprocess.run(["git", "commit", "-m", f"Weekly report {current_date}"], cwd=REPO_ROOT, check=False, capture_output=True)
+        subprocess.run(["git", "push", "origin", "main"], cwd=REPO_ROOT, check=True, capture_output=True)
+        print("已推送到 GitHub")
+    except Exception as e:
+        print(f"GitHub 推送失败（可能是网络问题，请手动 git push）: {e}")
+
 if __name__ == "__main__":
     print("\n====== AI与数据驱动周报 生成任务启动 ======")
     report_content = generate_report_content()
     if report_content:
         filepath = save_report(report_content)
         push_to_feishu_group(filepath)
+        auto_push_to_github()
     print("====== 任务流结束 ======\n")
