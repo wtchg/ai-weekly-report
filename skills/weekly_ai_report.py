@@ -1,9 +1,15 @@
 import os
 import json
 import glob
+import ssl
 import urllib.request
 import urllib.error
 from datetime import datetime
+
+# 公司网络 SSL 代理证书绕过（个人脚本，仅本地运行）
+_SSL_CTX = ssl.create_default_context()
+_SSL_CTX.check_hostname = False
+_SSL_CTX.verify_mode = ssl.CERT_NONE
 
 # 自动加载 .env 文件中的环境变量（优先级低于系统已设的环境变量）
 _ENV_PATH = os.path.join(os.path.dirname(__file__), "..", ".env")
@@ -89,7 +95,7 @@ def generate_report_content() -> str:
 
     try:
         req = urllib.request.Request(url, data=json.dumps(data).encode('utf-8'), headers=headers, method='POST')
-        with urllib.request.urlopen(req, timeout=180) as res:
+        with urllib.request.urlopen(req, timeout=180, context=_SSL_CTX) as res:
             return json.loads(res.read().decode('utf-8'))["choices"][0]["message"]["content"].replace("{current_date}", current_date)
     except Exception as e:
         print(f"Kimi API 调用失败: {e}")
@@ -440,7 +446,7 @@ def push_to_feishu_group(report_path: str):
     }
     req = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'), headers={'Content-Type': 'application/json', 'User-Agent': 'Mozilla/5.0'}, method='POST')
     try:
-        urllib.request.urlopen(req, timeout=30)
+        urllib.request.urlopen(req, timeout=30, context=_SSL_CTX)
         print("群聊通知发送成功！")
     except: pass
 
