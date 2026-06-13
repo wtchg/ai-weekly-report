@@ -123,34 +123,14 @@ def generate_report_content() -> str:
     data = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
-        "max_completion_tokens": 32768,
-        "stream": True
+        "max_completion_tokens": 24576
     }
 
     try:
         req = urllib.request.Request(url, data=json.dumps(data).encode('utf-8'), headers=headers, method='POST')
         with urllib.request.urlopen(req, timeout=900, context=_SSL_CTX) as res:
-            content_parts = []
-            reasoning_parts = []
-            for line_bytes in res:
-                line = line_bytes.decode('utf-8').strip()
-                if not line.startswith("data: "):
-                    continue
-                if line == "data: [DONE]":
-                    break
-                try:
-                    chunk = json.loads(line[6:])
-                    delta = chunk.get("choices", [{}])[0].get("delta", {})
-                    c = delta.get("content", "")
-                    r = delta.get("reasoning_content", "")
-                    if c:
-                        content_parts.append(c)
-                    if r:
-                        reasoning_parts.append(r)
-                except (json.JSONDecodeError, KeyError, IndexError):
-                    continue
-            # thinking 模式优先 content，fallback 到 reasoning
-            result = "".join(content_parts) or "".join(reasoning_parts)
+            msg = json.loads(res.read().decode('utf-8'))["choices"][0]["message"]
+            result = msg.get("content") or msg.get("reasoning_content", "")
             return result.replace("{current_date}", current_date)
     except Exception as e:
         print(f"Kimi API 调用失败: {e}")
