@@ -220,8 +220,12 @@ def generate_report_content() -> str:
         return ""
 
 def cleanup_markdown(text: str) -> str:
-    """后处理：修复模型输出的格式违规"""
+    """后处理：修复模型输出的格式违规，裁掉前置废话"""
     import re
+    # 找到第一个 # 标题，裁掉之前的所有内容（K2.6 的内心独白）
+    m = re.search(r'^#\s', text, re.MULTILINE)
+    if m:
+        text = text[m.start():]
     # #### 四级标题 → 加粗列表项
     text = re.sub(r'^####\s+(.+)', r'- **\1**', text, flags=re.MULTILINE)
     # ##### 五级标题同上
