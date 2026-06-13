@@ -117,21 +117,34 @@ def generate_report_content() -> str:
 
     api_key = os.getenv("OPENAI_API_KEY")
     model = os.getenv("DEFAULT_MODEL", "kimi-k2.6")
-    print(f"正在连接 Kimi ({model}) 撰写深度行业报告 (预计 60-120 秒)...")
+    print(f"正在连接 Kimi ({model}) 撰写深度行业报告 (预计 3-5 分钟)...")
     url = "https://api.moonshot.cn/v1/chat/completions"
-    headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}
-    data = {
+
+    payload = json.dumps({
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
-        "max_completion_tokens": 24576
-    }
+        "max_completion_tokens": 32768
+    })
 
+    import subprocess
     try:
-        req = urllib.request.Request(url, data=json.dumps(data).encode('utf-8'), headers=headers, method='POST')
-        with urllib.request.urlopen(req, timeout=900, context=_SSL_CTX) as res:
-            msg = json.loads(res.read().decode('utf-8'))["choices"][0]["message"]
-            result = msg.get("content") or msg.get("reasoning_content", "")
-            return result.replace("{current_date}", current_date)
+        result = subprocess.run([
+            "curl", "-k", "-s", "-X", "POST", url,
+            "-H", "Content-Type: application/json",
+            "-H", f"Authorization: Bearer {api_key}",
+            "-d", payload,
+            "--max-time", "900"
+        ], capture_output=True, text=True, timeout=910)
+        if result.returncode != 0:
+            print(f"curl 调用失败: {result.stderr}")
+            return ""
+        resp = json.loads(result.stdout)
+        msg = resp.get("choices", [{}])[0].get("message", {})
+        content = msg.get("content") or msg.get("reasoning_content", "")
+        return content.replace("{current_date}", current_date)
+    except subprocess.TimeoutExpired:
+        print("Kimi API 调用超时（超过 15 分钟）")
+        return ""
     except Exception as e:
         print(f"Kimi API 调用失败: {e}")
         return ""
