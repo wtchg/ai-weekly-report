@@ -94,7 +94,7 @@ def generate_report_content() -> str:
 {career_fw}
 
 【篇幅要求】
-每部分至少 800 字，整份报告目标 5000-8000 字。每个案例要给出足够的背景、细节和数据，每条 JD 分析要有具体岗位名+技能要求+差距对比，每个方法论解释要让零基础的人读完就懂。
+每部分至少 1200 字，整份报告 8000-12000 字。深度展开每个案例的完整背景、数据细节和推导过程，每条 JD 分析要拆解具体岗位的核心能力要求和面试要点，方法论解释要配真实分析案例。
 
 【链接原则——严格遵守】
 - 可以链接到论文 DOI（如 https://doi.org/10.1257/xxx），这比链接到期刊主页更可靠
@@ -123,7 +123,7 @@ def generate_report_content() -> str:
     data = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
-        "max_completion_tokens": 16384
+        "max_completion_tokens": 32768
     }
 
     try:
