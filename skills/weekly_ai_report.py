@@ -93,6 +93,15 @@ def generate_report_content() -> str:
 【职业发展参考框架】
 {career_fw}
 
+【篇幅要求】
+本次使用 128k 上下文模型，有充足空间。每个板块至少写 600 字，整份报告目标 4000-6000 字。每个案例、每条 JD 分析、每个方法论解释必须展开写，给出足够的细节让读者真正理解，不要一句话带过。
+
+【链接原则——严格遵守】
+- 可以链接到论文 DOI（如 https://doi.org/10.1257/xxx），这比链接到期刊主页更可靠
+- 推荐书籍时只写《书名》第X章，不要编造不存在的书籍
+- GitHub 仓库或在线教程只链接主流知名资源（如 "Causal Inference for the Brave and True"），不要链接你可能记错的小众博客或个人页面
+- 绝不要编造任何链接。无法确认链接有效时，改用"搜索关键词：XXX"
+
 【排版要求】
 必须严格遵循以下 Markdown 模板结构（保持层级关系，禁止新增或合并章节，禁止添加 emoji，禁止使用 *斜体* 标记）：
 
@@ -102,18 +111,27 @@ def generate_report_content() -> str:
 - 读完第一部分，一个同花顺新用户 DA 能不能在周一晨会上提出一个具体的观点？如果没有，重写
 - 第二部分有没有可检索验证的具体信息（产品名、版本号、政策文件标题）？如果没有，重写
 - 第三部分有没有具体公司+具体岗位+具体技能要求？差距分析有没有尊重用户的起点（刚入职、DID熟练、Python弱）？如果没有，重写
-- 第四部分的技能建议是不是"别人也建议的通用方向"？如果是因果推断的进阶（RDD/IV/SCM），这是正确的——他的计量背景是稀缺优势，应该深耕。如果建���的是"学SQL"或"学Python基础"，重写
+- 第四部分的技能建议是不是"别人也建议的通用方向"？如果是因果推断的进阶（RDD/IV/SCM），这是正确的——他的计量背景是稀缺优势，应该深耕。如果建议的是"学SQL"或"学Python基础"，重写
+- 每个链接你能确认它在互联网上真实存在吗？如果不能，删掉链接改用"搜索关键词：XXX"
 """
 
     api_key = os.getenv("OPENAI_API_KEY")
-    print("正在连接 Kimi 撰写深度行业报告 (预计 60-90 秒)...")
+
+    api_key = os.getenv("OPENAI_API_KEY")
+    model = os.getenv("DEFAULT_MODEL", "moonshot-v1-128k")
+    print(f"正在连接 Kimi ({model}) 撰写深度行业报告 (预计 60-120 秒)...")
     url = "https://api.moonshot.cn/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}
-    data = {"model": os.getenv("DEFAULT_MODEL", "moonshot-v1-32k"), "messages": [{"role": "user", "content": prompt}], "temperature": 0.7}
+    data = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.7,
+        "max_tokens": 8192
+    }
 
     try:
         req = urllib.request.Request(url, data=json.dumps(data).encode('utf-8'), headers=headers, method='POST')
-        with urllib.request.urlopen(req, timeout=180, context=_SSL_CTX) as res:
+        with urllib.request.urlopen(req, timeout=300, context=_SSL_CTX) as res:
             return json.loads(res.read().decode('utf-8'))["choices"][0]["message"]["content"].replace("{current_date}", current_date)
     except Exception as e:
         print(f"Kimi API 调用失败: {e}")
