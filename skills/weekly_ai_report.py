@@ -94,7 +94,7 @@ def generate_report_content() -> str:
 {career_fw}
 
 【篇幅要求】
-每个板块至少写 400 字，整份报告目标 2500-4000 字。每个案例、每条 JD 分析、每个方法论解释必须展开写，给出足够的细节让读者真正理解，不要一句话带过。
+每个板块至少写 500 字，整份报告目标 3500-5000 字。每个案例、每条 JD 分析、每个方法论解释必须展开写，给出足够的细节让读者真正理解，不要一句话带过。
 
 【链接原则——严格遵守】
 - 可以链接到论文 DOI（如 https://doi.org/10.1257/xxx），这比链接到期刊主页更可靠
@@ -116,20 +116,20 @@ def generate_report_content() -> str:
 """
 
     api_key = os.getenv("OPENAI_API_KEY")
-    model = os.getenv("DEFAULT_MODEL", "moonshot-v1-32k")
-    print(f"正在连接 Kimi ({model}) 撰写深度行业报告 (预计 60-90 秒)...")
+    model = os.getenv("DEFAULT_MODEL", "kimi-k2.5")
+    print(f"正在连接 Kimi ({model}) 撰写深度行业报告 (预计 60-120 秒)...")
     url = "https://api.moonshot.cn/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}
     data = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.7,
-        "max_tokens": 4096
+        "max_tokens": 8192
     }
 
     try:
         req = urllib.request.Request(url, data=json.dumps(data).encode('utf-8'), headers=headers, method='POST')
-        with urllib.request.urlopen(req, timeout=180, context=_SSL_CTX) as res:
+        with urllib.request.urlopen(req, timeout=300, context=_SSL_CTX) as res:
             return json.loads(res.read().decode('utf-8'))["choices"][0]["message"]["content"].replace("{current_date}", current_date)
     except Exception as e:
         print(f"Kimi API 调用失败: {e}")
