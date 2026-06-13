@@ -124,15 +124,15 @@ def generate_report_content() -> str:
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.7,
-        "max_completion_tokens": 8192,
-        "thinking": {"type": "disabled"}
+        "max_completion_tokens": 16384,
+        "thinking": {"type": "enabled"}
     }
 
     try:
         req = urllib.request.Request(url, data=json.dumps(data).encode('utf-8'), headers=headers, method='POST')
         with urllib.request.urlopen(req, timeout=300, context=_SSL_CTX) as res:
             msg = json.loads(res.read().decode('utf-8'))["choices"][0]["message"]
-            # K2.6 thinking 模式下 content 可能为空，fallback 到 reasoning_content
+            # thinking 模式下 content 是正文，reasoning_content 是内部推理
             result = msg.get("content") or msg.get("reasoning_content", "")
             return result.replace("{current_date}", current_date)
     except Exception as e:
