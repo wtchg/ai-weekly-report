@@ -118,19 +118,23 @@ def generate_report_content() -> str:
     api_key = os.getenv("OPENAI_API_KEY")
     model = os.getenv("DEFAULT_MODEL", "kimi-k2.6")
     print(f"正在连接 Kimi ({model}) 撰写深度行业报告 (预计 60-120 秒)...")
-    url = "https://api.moonshot.ai/v1/chat/completions"
+    url = "https://api.moonshot.cn/v1/chat/completions"
     headers = {"Authorization": f"Bearer {api_key}", "Content-Type": "application/json", "User-Agent": "Mozilla/5.0"}
     data = {
         "model": model,
         "messages": [{"role": "user", "content": prompt}],
         "temperature": 0.7,
-        "max_completion_tokens": 8192
+        "max_completion_tokens": 8192,
+        "thinking": {"type": "disabled"}
     }
 
     try:
         req = urllib.request.Request(url, data=json.dumps(data).encode('utf-8'), headers=headers, method='POST')
         with urllib.request.urlopen(req, timeout=300, context=_SSL_CTX) as res:
-            return json.loads(res.read().decode('utf-8'))["choices"][0]["message"]["content"].replace("{current_date}", current_date)
+            msg = json.loads(res.read().decode('utf-8'))["choices"][0]["message"]
+            # K2.6 thinking 模式下 content 可能为空，fallback 到 reasoning_content
+            result = msg.get("content") or msg.get("reasoning_content", "")
+            return result.replace("{current_date}", current_date)
     except Exception as e:
         print(f"Kimi API 调用失败: {e}")
         return ""
