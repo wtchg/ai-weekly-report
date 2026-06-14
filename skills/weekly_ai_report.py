@@ -41,6 +41,119 @@ def read_career_framework() -> str:
     except:
         return ""
 
+def is_monday() -> bool:
+    return datetime.now().weekday() == 0
+
+def current_week_key() -> str:
+    now = datetime.now()
+    return f"{now.year}-W{now.isocalendar()[1]}"
+
+def check_monday_guard() -> bool:
+    """周一专属守卫：非周一运行直接退出，本周已有报告也退出。"""
+    if not is_monday():
+        print("周报仅在周一自动生成。今天是周"
+              + ["一","二","三","四","五","六","日"][datetime.now().weekday()]
+              + "，跳过生成。")
+        return True
+    week_key = current_week_key()
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    for f in sorted(os.listdir(OUTPUT_DIR)):
+        if not f.endswith('.html'):
+            continue
+        fpath = os.path.join(OUTPUT_DIR, f)
+        try:
+            mtime = datetime.fromtimestamp(os.path.getmtime(fpath))
+            f_week = f"{mtime.year}-W{mtime.isocalendar()[1]}"
+            if f_week == week_key:
+                print(f"本周已有正式报告（{f}），跳过生成。")
+                return True
+        except:
+            pass
+    return False
+
+def extract_morning_scan_lines(content: str) -> list:
+    """从报告内容中提取5个板块的一句信号。基于结构匹配：每个## 标题后的第一个>引用块。"""
+    import re
+    section_info = [
+        ('一', 'C端AI产品落地观察'),
+        ('二', '互联网行业数据与AI动态'),
+        ('三', '大厂社招岗位洞察'),
+        ('四', '本周技能精进'),
+        ('五', '本周信息雷达'),
+    ]
+    lines = []
+    for num, title in section_info:
+        # 匹配 "## 一、..." 或 "## 一、 ..." 标题，之后找到第一个 > 引用块
+        pattern = rf'##\s+{re.escape(num)}[、,]\s*\S+.*?\n\n>\s*(.+?)(?:\n|$)'
+        m = re.search(pattern, content)
+        if not m:
+            # fallback: 标题后可能有空格
+            pattern = rf'##\s+{re.escape(num)}[、,]\s*\S+.*?\n>\s*(.+?)(?:\n|$)'
+            m = re.search(pattern, content)
+        if m:
+            text = m.group(1).strip().rstrip('。')
+            # 去除可能残留的 ** 标记和旧版标签
+            text = re.sub(r'\*{1,2}', '', text)
+            text = re.sub(r'^本周一句话[：:]?\s*', '', text)
+        else:
+            text = ''
+        lines.append({'num': num, 'title': title, 'text': text})
+    return lines
+
+def read_last_week_output_goal() -> str | None:
+    """读取上周报告的4.3节产出目标，用于本周prompt注入。"""
+    import html as html_mod
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    files = sorted(
+        [f for f in os.listdir(OUTPUT_DIR) if f.endswith('.html')],
+        reverse=True
+    )
+    if not files:
+        return None
+    try:
+        with open(os.path.join(OUTPUT_DIR, files[0]), 'r', encoding='utf-8') as f:
+            html_text = f.read()
+        # 找 <h3>4.3 本周产出目标</h3> 和下一个 <h3> 或 <hr> 之间的内容
+        import re
+        m = re.search(
+            r'<h3>4\.\d\s*本周产出目标</h3>(.+?)(?:<h[23]|<hr)',
+            html_text, re.DOTALL
+        )
+        if not m:
+            return None
+        raw = m.group(1)
+        # 去除HTML标签
+        raw = re.sub(r'<[^>]+>', '', raw)
+        raw = html_mod.unescape(raw).strip()
+        if len(raw) > 600:
+            raw = raw[:600] + '...'
+        return raw
+    except:
+        return None
+
+def estimate_reading_time(content: str) -> int:
+    """估算阅读时间（分钟），按中文250字/分钟。"""
+    import re
+    text = re.sub(r'[^一-鿿]', '', content)
+    char_count = len(text)
+    return max(1, round(char_count / 250))
+
+def _inject_last_week_review() -> str:
+    goal = read_last_week_output_goal()
+    if not goal:
+        return ""
+    return f"""
+【上周回顾】
+上周报告的"本周产出目标"内容如下：
+```
+{goal}
+```
+
+在生成本周报告时，请在第四部分的4.3节开头用1句话回应上周目标：
+- 假设用户已完成：基于上周成果进阶到下一步
+- 假设用户未完成：建议聚焦同一目标，不急于推进新内容
+"""
+
 def generate_report_content() -> str:
     current_date = datetime.now().strftime("%Y-%m-%d")
     template = read_template()
@@ -56,12 +169,16 @@ def generate_report_content() -> str:
 - 阅读习惯：早上 5 分钟扫关键信息，周末 30 分钟精读。信息密度优先
 - 能力策略：因果推断是核心壁垒（计量硕士背景是稀缺优势，DID→RDD→IV→合成控制法）；AI+Python 是效率放大器（pandas→statsmodels→DoWhy）；壁垒层优先级高于效率层
 
+{_inject_last_week_review()}
+
 【约束】
-1. 只写本周（{current_date}所在周）真实动态。不确定的宁可不写，绝不编造
+1. 只写本周（{current_date}所在周）真实动态。不确定的宁可不写，绝不编造。尤其注意：不要编造具体的发布日期、版本号、MAU数字——除非你通过联网搜索确认了这些细节。如果你不确定一个数字是否准确，用"据报道""据公开信息"等措辞，或不写具体数字
 2. 非公开数据指标必须标注来源。禁止"赋能、降维打击、破局、闭环、抓手、底层逻辑、颗粒度"等套话
 3. 每段≤5句。每条分析必须回答：这对同花顺新用户 DA 意味着什么？他该做什么？
 4. 链接只写确认存在的 DOI 或主流知名资源（如 Causal Inference for the Brave and True），不确定就改用"搜索关键词：XXX"
 5. 标题只允许 # ## ### 三级，禁止 #### 及以上。需要四级子标题时用 - **加粗列表项**
+6. 不要在文中出现以下表述模式及其变体："正是X的稀缺价值所在""这正是X的核心机会窗口""而非会跑SQL取数""计量背景""因果推断背景""与用户的X背景直接相关"。用户画像是让你内化后校准建议用的，不是让你在文中反复朗诵的。给你一个测试：把报告读给你不认识的人听——如果他听完能说出"这个读者好像是学计量的、刚毕业"，那就重写
+7. 优先使用联网搜索获取本周真实动态。搜索到的信息要给出具体事实，但绝不要为了"看起来信息量大"而编造日期、版本号或事件。如果某子节确实搜不到值得写的新信息，写一句诚实说明（如"本周该方向无重大更新"）即可——诚实的简短比虚构的丰富更有价值
 
 {career_fw}
 
@@ -69,12 +186,13 @@ def generate_report_content() -> str:
 {template}
 
 各部分要点：
-- 每个板块顶部的 > 引用块是"早上扫读层"，必须用加粗写一句完整结论（看完这句话就知道本周这个板块最重要的信号是什么）。正文是"周末精读层"
+- 每个板块标题下方用 > 引用块写一句完整结论——仅一句，加粗。这句话会被提取到页面顶部的"今日速览"面板，也是读者早上10秒扫读的内容。正文是下方展开的分析层
 - 第一部分：聚焦新用户增长与转化的 AI 产品动态
 - 第二部分：2.1 案例必须是字节/淘天/小红书/美团/腾讯的真实实践，2.2 覆盖本周模型发布/开源/API/监管
-- 第三部分：具体到公司+岗位+JD要求（≥2家公司）。3.1 的"实际工作中怎么做"不要写成面试回答——要写这个岗位的人日常用什么工具、和谁协作、做什么类型的分析项目、产出什么文档。差距分析诚实面对用户起点（刚入职/DID熟练/Python弱/ML浅）
+- 第三部分：具体到公司+岗位+JD要求（≥2家公司）。3.1 的"实际工作中怎么做"不要写成面试回答——要写这个岗位的人日常用什么工具、和谁协作、做什么类型的分析项目、产出什么文档。差距分析实事求是，不回避短板，直接列出具体差距和行动建议。**每个岗位必须标注信息来源**：来自招聘官网的标注"来源：XX招聘官网（本周发布）"，基于行业趋势推演的标注"来源：基于近期JD模式综合推演"，不确定的一律标注"来源：待验证，建议搜索关键词XX自行确认"
 - 第四部分：建在已有基础上推因果推断进阶（RDD/IV/SCM）或 Python 因果推断实操。4.1 用同花顺场景大白话解释。4.2 给公司名+场景+效果+来源。4.3 是"本周产出目标"——不是学什么，是产出一份什么。必须具体到文件名和内容描述，这份产出下周就能放进面试作品集
-- 第五部分（信息雷达）：推荐本周值得看的技术博客/分析报告（来自字节/小红书/美团等团队的真实分享），值得关注的人（即刻/公众号等真实可检索的），值得一试的新工具。目的是帮用户缩小与纯互联网圈子的信息差。宁可少列一条也绝不编造
+- 第五部分（信息雷达）：推荐本周值得看的技术博客/分析报告（来自字节/小红书/美团等团队的真实分享），值得关注的人（即刻/公众号等真实可检索的），值得一试的新工具。**硬约束：至少1条是本周内（{current_date}所在周）发布或发现的内容。第五部分的板块总结句（> 引用块）必须包含一个具体名称或事件，不能写成"X生态持续完善"这种模糊概括。如确实无新信息，写明"本周无新发现"并跳过该板块。宁可少列一条也绝不编造**
+- **宁可简短，不可编造**：如果一个 ### 子节本周确实搜索不到值得写的新内容，用 1-2 句诚实说明即可。例如"本周该方向无重大发布"——这是诚实，不是敷衍。诚实的信息简报胜过虚构的深度分析
 """
 
     api_key = os.getenv("OPENAI_API_KEY")
@@ -157,6 +275,13 @@ def generate_report_content() -> str:
             # 正常完成
             if finish == "stop" or finish == "length" or msg.get("content"):
                 content = msg.get("content") or msg.get("reasoning_content", "")
+                usage = resp.get("usage", {})
+                if usage:
+                    prompt_tokens = usage.get("prompt_tokens", 0)
+                    completion_tokens = usage.get("completion_tokens", 0)
+                    total_tokens = usage.get("total_tokens", 0)
+                    cost_est = total_tokens / 1_000_000 * 1.0
+                    print(f"  Token用量: {total_tokens} (输入{prompt_tokens} + 输出{completion_tokens})，预估成本 ¥{cost_est:.2f}")
                 return content.replace("{current_date}", current_date)
 
             # 未预期的 finish_reason
@@ -183,6 +308,8 @@ def cleanup_markdown(text: str) -> str:
     m = re.search(r'^#\s', text, re.MULTILINE)
     if m:
         text = text[m.start():]
+    # 去掉第一个 # 一级标题（HTML 页面另有 h1），保留其后的所有内容
+    text = re.sub(r'^#\s.+\n+', '', text, count=1, flags=re.MULTILINE)
     # #### 四级标题 → 加粗列表项
     text = re.sub(r'^####\s+(.+)', r'- **\1**', text, flags=re.MULTILINE)
     # ##### 五级标题同上
@@ -193,6 +320,9 @@ def cleanup_markdown(text: str) -> str:
 
 def markdown_to_html(md: str) -> str:
     import re
+
+    # 预处理：提取并替换 pipe table，避免被后续逐行解析误处理
+    md, table_placeholders = _extract_tables(md)
 
     lines = md.split('\n')
     html = []
@@ -273,7 +403,60 @@ def markdown_to_html(md: str) -> str:
 
     close_lists()
     close_quote()
-    return '\n'.join(html)
+    result = '\n'.join(html)
+    # 回填表格 HTML
+    for idx, table_html in enumerate(table_placeholders):
+        result = result.replace(f'<!-- TABLE_{idx} -->', table_html)
+    return result
+
+
+def _extract_tables(md: str) -> tuple:
+    """从 markdown 中提取 pipe table 块，返回(替换后的md, [table_html列表])。"""
+    import re
+    lines = md.split('\n')
+    result_lines = []
+    table_html_list = []
+    i = 0
+
+    while i < len(lines):
+        line = lines[i]
+        stripped = line.strip()
+
+        if stripped.startswith('|') and not stripped.startswith('|---') and i + 1 < len(lines):
+            next_stripped = lines[i + 1].strip()
+            if next_stripped.startswith('|') and '---' in next_stripped:
+                table_lines = []
+                while i < len(lines) and lines[i].strip().startswith('|'):
+                    table_lines.append(lines[i].strip())
+                    i += 1
+
+                if len(table_lines) >= 3:
+                    header_cells = [c.strip() for c in table_lines[0].split('|')[1:-1]]
+                    body_rows = []
+                    for tl in table_lines[2:]:
+                        cells = [c.strip() for c in tl.split('|')[1:-1]]
+                        body_rows.append(cells)
+
+                    th_html = ''.join(f'<th>{c}</th>' for c in header_cells)
+                    thead = f'<thead><tr>{th_html}</tr></thead>'
+                    tbody_parts = []
+                    for row in body_rows:
+                        td_html = ''.join(
+                            f'<td>{row[j] if j < len(row) else ""}</td>'
+                            for j in range(len(header_cells))
+                        )
+                        tbody_parts.append(f'<tr>{td_html}</tr>')
+                    tbody = f'<tbody>{"".join(tbody_parts)}</tbody>'
+                    table_html = f'<table>{thead}{tbody}</table>'
+
+                    result_lines.append(f'<!-- TABLE_{len(table_html_list)} -->')
+                    table_html_list.append(table_html)
+                    continue
+
+        result_lines.append(line)
+        i += 1
+
+    return '\n'.join(result_lines), table_html_list
 
 def scan_history() -> list:
     """扫描 output 目录，返回历史报告列表（按日期倒序）。"""
@@ -297,9 +480,25 @@ def build_sidebar_html(history: list, current_date: str) -> str:
                      f'<span class="history-date">{h["date"]}</span></a>')
     return '\n'.join(items) if items else '<p style="color:var(--muted);font-size:0.8rem;padding:0 12px;">暂无历史报告</p>'
 
-def build_html_page(body_html: str, current_date: str) -> str:
+def build_html_page(body_html: str, current_date: str, morning_scan: list | None = None, reading_minutes: int = 5) -> str:
     history = scan_history()
     sidebar = build_sidebar_html(history, current_date)
+
+    morning_brief_html = ""
+    if morning_scan:
+        items = []
+        for item in morning_scan:
+            items.append(f"""      <div class="brief-item">
+        <span class="brief-num">{item['num']}</span>
+        <div class="brief-content">
+          <p>{item['text']}</p>
+        </div>
+      </div>""")
+        morning_brief_html = f"""    <section class="morning-brief">
+      <div class="brief-title">今日速览</div>
+{"".join(items)}
+    </section>
+"""
 
     return f'''<!DOCTYPE html>
 <html lang="zh-CN">
@@ -307,27 +506,34 @@ def build_html_page(body_html: str, current_date: str) -> str:
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>AI与数据驱动周报 ({current_date})</title>
+<meta property="og:title" content="AI与数据驱动周报 ({current_date})">
+<meta property="og:description" content="个性化行业周报">
+<meta property="og:type" content="article">
+<meta name="twitter:card" content="summary">
 <style>
   :root {{
-    --bg: #faf8f5;
-    --card: #ffffff;
-    --text: #1a1a1a;
-    --muted: #8c8c8c;
-    --border: #e8e4dc;
-    --accent: #b8753e;
-    --accent-dim: #e8d5c4;
-    --sidebar-w: 220px;
+    --bg: #fbfaf7;
+    --text: #1d1d1d;
+    --muted: #6e6e6e;
+    --faint: #9e9e9e;
+    --border: #e8e4df;
+    --rule: #d6d0c4;
+    --accent: #c2925a;
+    --accent-hover: #a87740;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    --serif: "Songti SC", "Noto Serif SC", "Source Han Serif SC", "SimSun", STSong, Georgia, serif;
+    --sidebar-w: 160px;
+    --content-w: 700px;
+    --gap: 64px;
   }}
   * {{ margin: 0; padding: 0; box-sizing: border-box; }}
 
   body {{
-    font-family: "Songti SC", "Noto Serif SC", "Source Han Serif SC", "SimSun", "STSong", Georgia, serif;
-    font-size: 16px;
-    line-height: 1.8;
+    font-family: var(--serif);
+    font-size: 17px;
+    line-height: 1.85;
     color: var(--text);
     background: var(--bg);
-    display: flex;
-    min-height: 100vh;
   }}
 
   /* ---- 侧边栏 ---- */
@@ -335,41 +541,33 @@ def build_html_page(body_html: str, current_date: str) -> str:
     position: fixed;
     top: 0; left: 0; bottom: 0;
     width: var(--sidebar-w);
-    background: #f5f1eb;
-    border-right: 1px solid var(--border);
-    padding: 48px 0 32px;
+    padding: 56px 0 32px;
     overflow-y: auto;
     z-index: 10;
   }}
   .sidebar-title {{
-    font-size: 0.85rem;
-    font-weight: 700;
-    letter-spacing: 0.06em;
+    font-family: var(--sans);
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--muted);
-    padding: 0 24px 24px;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 20px;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    color: var(--faint);
+    margin-bottom: 28px;
   }}
   .history-link {{
     display: block;
-    padding: 6px 24px;
-    font-size: 0.8rem;
+    font-family: var(--sans);
+    font-size: 0.76rem;
     color: var(--muted);
     text-decoration: none;
-    transition: all 0.15s;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    padding: 3px 0;
   }}
   .history-link:hover {{
     color: var(--text);
-    background: var(--bg);
   }}
   .history-link.active {{
-    color: var(--accent);
+    color: var(--text);
     font-weight: 600;
-    background: var(--bg);
-    border-right: 2px solid var(--accent);
   }}
   .history-date {{
     letter-spacing: 0.02em;
@@ -378,43 +576,47 @@ def build_html_page(body_html: str, current_date: str) -> str:
   /* ---- 主内容 ---- */
   .main {{
     margin-left: var(--sidebar-w);
-    flex: 1;
-    max-width: 760px;
-    padding: 64px 64px 96px;
+    max-width: var(--content-w);
+    padding: 68px 0 120px var(--gap);
   }}
 
   h1 {{
-    font-size: 2rem;
+    font-size: 1.7rem;
     font-weight: 700;
-    letter-spacing: -0.01em;
-    line-height: 1.25;
-    margin: 0 0 8px 0;
+    letter-spacing: 0.02em;
+    line-height: 1.3;
+    margin: 0 0 4px 0;
   }}
   h2 {{
-    font-size: 1.25rem;
-    font-weight: 700;
-    margin: 56px 0 20px 0;
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin: 52px 0 12px 0;
     padding-bottom: 10px;
-    border-bottom: 1px solid var(--border);
-    letter-spacing: -0.005em;
+    border-bottom: 0.5px solid var(--rule);
+    letter-spacing: 0.03em;
   }}
   h3 {{
-    font-size: 1rem;
-    font-weight: 700;
-    margin: 36px 0 12px 0;
-    color: #2c2c2c;
+    font-size: 0.92rem;
+    font-weight: 600;
+    margin: 32px 0 8px 0;
+    color: #222;
   }}
   p {{
     margin: 0 0 14px 0;
   }}
 
   blockquote {{
-    margin: 20px 0;
-    padding: 14px 20px;
-    background: #fdfaf5;
-    border-left: 3px solid var(--accent);
-    border-radius: 0 4px 4px 0;
-    color: #4a4035;
+    margin: 10px 0 18px;
+    padding: 0;
+    border: none;
+    color: #4a4a4a;
+    font-weight: 500;
+    font-size: 0.94rem;
+    line-height: 1.65;
+  }}
+  blockquote strong {{
+    color: #3a3a3a;
+    font-weight: 600;
   }}
   blockquote p {{ margin: 4px 0; }}
 
@@ -423,7 +625,7 @@ def build_html_page(body_html: str, current_date: str) -> str:
     padding-left: 22px;
   }}
   li {{
-    margin: 8px 0;
+    margin: 7px 0;
   }}
   li strong:first-child {{
     color: #111;
@@ -431,75 +633,186 @@ def build_html_page(body_html: str, current_date: str) -> str:
 
   hr {{
     border: none;
-    border-top: 1px solid var(--border);
-    margin: 40px 0;
+    border-top: 0.5px solid var(--rule);
+    margin: 44px 0;
   }}
 
   a {{
     color: var(--accent);
     text-decoration: none;
-    border-bottom: 1px solid var(--accent-dim);
-    transition: border-color 0.15s;
   }}
-  a:hover {{ border-bottom-color: var(--accent); }}
+  a:hover {{ color: var(--accent-hover); text-decoration: underline; }}
 
   strong {{ color: #111; font-weight: 700; }}
 
+  /* ---- 表格 (booktabs) ---- */
+  table {{
+    width: 100%;
+    border-collapse: collapse;
+    margin: 28px 0;
+    font-size: 0.84rem;
+    font-family: var(--sans);
+    border-top: 0.5px solid var(--rule);
+  }}
+  th {{
+    padding: 10px 28px 8px 0;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--muted);
+    border-bottom: 0.5px solid var(--rule);
+  }}
+  td {{
+    padding: 8px 28px 8px 0;
+    border: none;
+    vertical-align: baseline;
+    line-height: 1.5;
+  }}
+
+  /* ---- 今日速览面板 ---- */
+  .morning-brief {{
+    margin: 16px 0 36px;
+    padding: 24px 0;
+    border-top: 0.5px solid var(--rule);
+    border-bottom: 0.5px solid var(--rule);
+  }}
+  .brief-title {{
+    font-family: var(--sans);
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--faint);
+    margin-bottom: 20px;
+  }}
+  .brief-item {{
+    display: flex;
+    gap: 24px;
+    margin-bottom: 10px;
+  }}
+  .brief-item:last-child {{
+    margin-bottom: 0;
+  }}
+  .brief-num {{
+    flex-shrink: 0;
+    font-family: var(--serif);
+    font-size: 2.4rem;
+    font-weight: 700;
+    line-height: 1;
+    color: var(--rule);
+    min-width: 36px;
+    text-align: center;
+  }}
+  .brief-content p {{
+    font-size: 0.88rem;
+    font-weight: 600;
+    line-height: 1.55;
+    margin: 0;
+    padding-top: 6px;
+    color: var(--text);
+  }}
 
   .report-meta {{
-    color: var(--muted);
-    font-size: 0.85rem;
-    margin-bottom: 40px;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    font-family: var(--sans);
+    color: var(--faint);
+    font-size: 0.72rem;
+    margin-bottom: 4px;
   }}
   .report-footer {{
-    margin-top: 56px;
+    margin-top: 60px;
     padding-top: 20px;
-    border-top: 1px solid var(--border);
-    color: var(--muted);
-    font-size: 0.75rem;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-    letter-spacing: 0.02em;
+    border-top: 0.5px solid var(--rule);
+    font-family: var(--sans);
+    color: var(--faint);
+    font-size: 0.68rem;
+    letter-spacing: 0.04em;
   }}
 
-  .career-note {{
-    margin-top: 28px;
-    padding: 16px 20px;
-    background: #fdfaf5;
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    font-size: 0.85rem;
-    color: var(--muted);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
-  }}
-  .career-note a {{
-    font-weight: 600;
+  /* ---- 暗色模式 ---- */
+  @media (prefers-color-scheme: dark) {{
+    :root {{
+      --bg: #1b1b1b;
+      --text: #d6d1c8;
+      --muted: #888;
+      --faint: #6a6a6a;
+      --border: #333;
+      --rule: #3a3a3a;
+      --accent: #d4a56a;
+      --accent-hover: #e0b878;
+    }}
+    blockquote {{
+      color: #b0a99e;
+    }}
+    blockquote strong {{
+      color: #c8c0b4;
+    }}
+    h3 {{ color: #c8c0b4; }}
+    li strong:first-child,
+    strong {{ color: #e0dcd5; }}
   }}
 
-  @media (max-width: 800px) {{
-    .sidebar {{ display: none; }}
+  /* ---- 打印样式 ---- */
+  @media print {{
+    .sidebar {{ display: none !important; }}
     .main {{
       margin-left: 0;
-      padding: 40px 24px 64px;
       max-width: 100%;
+      padding: 0;
+    }}
+    body {{
+      font-size: 11pt;
+      line-height: 1.65;
+      background: #fff;
+      color: #000;
     }}
     h1 {{ font-size: 1.5rem; }}
+    h2 {{ font-size: 1.1rem; margin-top: 32px; }}
+    h3 {{ font-size: 0.95rem; margin-top: 18px; }}
+    .report-meta, .report-footer, .morning-brief {{ color: #666; }}
+    a {{ color: #000; text-decoration: underline; }}
+    a[href]::after {{ content: " (" attr(href) ")"; font-size: 0.8em; color: #666; }}
+    @page {{ margin: 2.2cm; }}
+  }}
+
+  /* ---- 响应式 ---- */
+  @media (max-width: 900px) {{
+    .sidebar {{
+      position: static;
+      width: 100%;
+      padding: 24px 20px 0;
+    }}
+    .sidebar-title {{
+      margin-bottom: 12px;
+    }}
+    .history-link {{
+      display: inline-block;
+      padding: 4px 12px 4px 0;
+      font-size: 0.74rem;
+    }}
+    .main {{
+      margin-left: 0;
+      max-width: 100%;
+      padding: 28px 20px 72px;
+    }}
+    h1 {{ font-size: 1.4rem; }}
   }}
 </style>
 </head>
 <body>
 
-<aside class="sidebar">
-  <div class="sidebar-title">历史周报</div>
+  <aside class="sidebar">
+    <div class="sidebar-title">历史周报</div>
 {sidebar}
-</aside>
+  </aside>
 
-<main class="main">
-<h1>AI与数据驱动周报</h1>
-<p class="report-meta">{current_date} · 由 Kimi K2.6 + 联网搜索 自动生成</p>
-{body_html}
-<p class="report-footer">OpenClaw Agent · AI与数据驱动周报</p>
-</main>
+  <main class="main">
+    <h1>AI与数据驱动周报</h1>
+    <p class="report-meta">{current_date} · 预计阅读 {reading_minutes} 分钟</p>
+    {morning_brief_html}{body_html}
+    <p class="report-footer">OpenClaw Agent · AI与数据驱动周报</p>
+  </main>
 
 </body>
 </html>'''
@@ -510,8 +823,10 @@ def save_report(content: str) -> str:
     os.makedirs(OUTPUT_DIR, exist_ok=True)
     filepath = os.path.join(OUTPUT_DIR, filename)
 
+    morning_scan = extract_morning_scan_lines(content)
+    reading_minutes = estimate_reading_time(content)
     body_html = markdown_to_html(content)
-    full_html = build_html_page(body_html, current_date)
+    full_html = build_html_page(body_html, current_date, morning_scan, reading_minutes)
 
     with open(filepath, 'w', encoding='utf-8') as f:
         f.write(full_html)
@@ -552,10 +867,92 @@ def auto_push_to_github():
     except Exception as e:
         print(f"GitHub 推送失败（可能是网络问题，请手动 git push）: {e}")
 
+def deepseek_audit(report_markdown: str) -> str | None:
+    """DeepSeek V4 Pro 事实核查审计。返回 null（跳过核查）或一段审计标记文本。"""
+    api_key = os.getenv("DEEPSEEK_API_KEY")
+    if not api_key:
+        print("  未配置 DEEPSEEK_API_KEY，跳过核查")
+        return None
+
+    print("  DeepSeek V4 Pro 启动事实核查...")
+    url = "https://api.deepseek.com/v1/chat/completions"
+
+    prompt = f"""你是事实核查审计员。以下是一份AI生成的行业周报。请逐板块审查其中每条声称的事实——发布日期、版本号、公司动态、数据指标——标记出"高可信"（有来源引述或符合公开知识）、"存疑"（过于具体但无来源引述）或"无法验证"（你无法判断真伪）。
+
+【审计规则】
+- 如果一句话包含"X月X日发布了Y版本Z"这种极其具体的信息但前面没有"据报道""据搜索"等引述，标记为存疑
+- 如果你确认某条信息是真实的，标注为可信
+- 给出1-3条整体建议
+
+【报告正文】
+{report_markdown}
+
+【输出格式】
+用中文输出一段简洁的审计结果（控制在500字以内），格式：
+### 信息可信度核查
+
+| 板块 | 可信度 | 问题项 |
+|------|--------|--------|
+| ... | 高/中/低 | ... |
+
+**整体评估**：...
+**建议**：..."""
+
+    import subprocess
+    import uuid
+
+    payload = {
+        "model": os.getenv("DEEPSEEK_MODEL", "deepseek-chat"),
+        "max_completion_tokens": 2048,
+        "messages": [{"role": "user", "content": prompt}]
+    }
+
+    try:
+        result = subprocess.run([
+            "curl", "-k", "-s", "-X", "POST", url,
+            "-H", "Content-Type: application/json",
+            "-H", f"Authorization: Bearer {api_key}",
+            "-d", json.dumps(payload, ensure_ascii=False),
+            "--max-time", "120"
+        ], capture_output=True, text=True, timeout=130)
+
+        if result.returncode != 0:
+            print(f"  DeepSeek 核查失败: {result.stderr}")
+            return None
+
+        resp = json.loads(result.stdout)
+        if "error" in resp:
+            print(f"  DeepSeek API 错误: {resp['error']}")
+            return None
+
+        content = resp["choices"][0]["message"].get("content", "")
+        usage = resp.get("usage", {})
+        total = usage.get("total_tokens", 0)
+        print(f"  DeepSeek 核查完成 ({total} tokens, 约 ¥{(total/1000000)*1.0:.3f})")
+        return content
+
+    except Exception as e:
+        print(f"  DeepSeek 核查异常: {e}")
+        return None
+
 if __name__ == "__main__":
     print("\n====== AI与数据驱动周报 生成任务启动 ======")
+    if check_monday_guard():
+        print("====== 任务流结束 ======\n")
+        exit(0)
     report_content = cleanup_markdown(generate_report_content())
     if report_content:
+        # DeepSeek 事实核查（在保存前执行）
+        audit_result = deepseek_audit(report_content)
+        if audit_result:
+            report_content += "\n\n---\n" + audit_result
+
         filepath = save_report(report_content)
         auto_push_to_github()
+
+        try:
+            from extract_weekly_data import extract_and_append
+            extract_and_append(report_content)
+        except Exception as e:
+            print(f"结构化提取失败（不影响报告发布）: {e}")
     print("====== 任务流结束 ======\n")
