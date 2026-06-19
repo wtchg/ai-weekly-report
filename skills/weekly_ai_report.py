@@ -365,6 +365,13 @@ def markdown_to_html(md: str) -> str:
             html.append('<hr>')
             continue
 
+        # Table placeholder — emit directly, no wrapping
+        if stripped.startswith('<!-- TABLE_'):
+            close_lists()
+            close_quote()
+            html.append(stripped)
+            continue
+
         if stripped.startswith('# '):
             close_lists()
             close_quote()
@@ -877,26 +884,19 @@ def deepseek_audit(report_markdown: str) -> str | None:
     print("  DeepSeek V4 Pro 启动事实核查...")
     url = "https://api.deepseek.com/v1/chat/completions"
 
-    prompt = f"""你是事实核查审计员。以下是一份AI生成的行业周报。请逐板块审查其中每条声称的事实——发布日期、版本号、公司动态、数据指标——标记出"高可信"（有来源引述或符合公开知识）、"存疑"（过于具体但无来源引述）或"无法验证"（你无法判断真伪）。
+    prompt = f"""你是事实核查审计员。当前日期是{current_date}。以下是一份AI生成的行业周报。请逐板块审查其中每条声称的事实——发布日期、版本号、公司动态、数据指标——标记出可信度并指出问题项。控制输出在300字以内。
 
 【审计规则】
-- 如果一句话包含"X月X日发布了Y版本Z"这种极其具体的信息但前面没有"据报道""据搜索"等引述，标记为存疑
-- 如果你确认某条信息是真实的，标注为可信
-- 给出1-3条整体建议
+- 如果一句话引用来源或标注"据报道""据悉"，标记为可信
+- 如果一句话因搜索不到具体信息而诚实说明（如"本周无重大""搜索关键词"），标记为诚实，不扣分
+- 如果一句话包含极其具体的日期/版本号/数字但无任何来源引述，标记为存疑
 
 【报告正文】
 {report_markdown}
 
 【输出格式】
-用中文输出一段简洁的审计结果（控制在500字以内），格式：
-### 信息可信度核查
-
-| 板块 | 可信度 | 问题项 |
-|------|--------|--------|
-| ... | 高/中/低 | ... |
-
-**整体评估**：...
-**建议**：..."""
+每个板块一行：`板块名 | 可信/诚实/存疑 | 一句话原因`
+最后给一句整体建议。"""
 
     import subprocess
     import uuid
@@ -942,10 +942,10 @@ if __name__ == "__main__":
         exit(0)
     report_content = cleanup_markdown(generate_report_content())
     if report_content:
-        # DeepSeek 事实核查（在保存前执行）
+        # DeepSeek 事实核查（仅输出到控制台，不追加到报告）
         audit_result = deepseek_audit(report_content)
         if audit_result:
-            report_content += "\n\n---\n" + audit_result
+            print(f"\n  === DeepSeek 核查结果（仅供参考，未加入报告） ===\n{audit_result}\n  ================\n")
 
         filepath = save_report(report_content)
         auto_push_to_github()
