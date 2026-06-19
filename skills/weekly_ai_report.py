@@ -833,6 +833,13 @@ def save_report(content: str) -> str:
     morning_scan = extract_morning_scan_lines(content)
     reading_minutes = estimate_reading_time(content)
     body_html = markdown_to_html(content)
+
+    # 先写一份临时 HTML 到 output/，确保 scan_history() 能找到本周文件
+    placeholder = build_html_page(body_html, current_date, morning_scan, reading_minutes)
+    with open(filepath, 'w', encoding='utf-8') as f:
+        f.write(placeholder)
+
+    # 重建——此时 scan_history() 已包含本周文件，sidebar 完整
     full_html = build_html_page(body_html, current_date, morning_scan, reading_minutes)
 
     with open(filepath, 'w', encoding='utf-8') as f:
